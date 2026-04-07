@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dynatrace — SRE Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="styles/dashboard.css">
+  <script src="scripts/theme.js"></script>
+  <style>
+    :root {
+      --dt-bg: #090b10;
+      --dt-panel: #11141d;
+      --dt-border: #1e2330;
+      /* Status Colors */
+      --st-status: #31a15f;
+      --st-slo: #28a745;
+      --st-traffic: #007bff;
+      --st-latency: #7d44b1;
+      --st-errors: #dc3545;
+      --st-warn: #fd7e14;
+    }
+    body { background: var(--dt-bg); color: #fff; overflow-x: hidden; }
+    
+    .sre-container { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    
+    /* TOP STATUS RAIL */
+    .status-rail { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .st-tile { 
+      background: var(--dt-panel); border-radius: 8px; border: 1px solid var(--dt-border);
+      padding: 16px; display: flex; flex-direction: column; gap: 12px;
+    }
+    .st-header { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
+    .st-body { display: flex; gap: 8px; }
+    .st-box { 
+      flex: 1; border-radius: 6px; padding: 12px 8px; text-align: center;
+      display: flex; flex-direction: column; gap: 4px; border: 1px solid rgba(255,255,255,0.05);
+    }
+    .st-label { font-size: 11px; font-weight: 600; opacity: 0.9; text-transform: uppercase; }
+    .st-value { font-size: 20px; font-weight: 800; font-family: var(--mono); }
+    
+    /* Tile Colors */
+    .tile-status .st-box { background: rgba(49, 161, 95, 0.15); color: #4ade80; border-color: rgba(74, 222, 128, 0.2); }
+    .tile-slo .st-box:nth-child(1) { background: #1b4d29; color: #4ade80; }
+    .tile-slo .st-box:nth-child(2) { background: #164022; color: #4ade80; }
+    .tile-traffic .st-box:nth-child(1) { background: #0b3d91; color: #a5c3f3; }
+    .tile-traffic .st-box:nth-child(2) { background: #082d6b; color: #a5c3f3; }
+    .tile-latency .st-box:nth-child(1) { background: #4b2c6e; color: #d8b4fe; }
+    .tile-latency .st-box:nth-child(2) { background: #381e55; color: #d8b4fe; }
+    .tile-errors .st-box { background: rgba(220, 53, 69, 0.2); color: #f87171; border-color: rgba(248, 113, 113, 0.2); }
+    .tile-errors .box-warn { background: rgba(253, 126, 20, 0.2); color: #fb923c; }
+
+    /* CHART GRID */
+    .chart-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .chart-panel { background: var(--dt-panel); border: 1px solid var(--dt-border); border-radius: 8px; padding: 16px; min-height: 240px; }
+    .chart-title { font-size: 12px; font-weight: 700; color: #8892b0; margin-bottom: 12px; }
+    .chart-area { height: 160px; position: relative; }
+
+    /* ANALYSIS TABLES */
+    .analysis-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .table-panel { background: var(--dt-panel); border: 1px solid var(--dt-border); border-radius: 8px; padding: 16px; }
+    .table-header { font-size: 14px; font-weight: 700; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; padding: 10px; color: #8892b0; font-weight: 600; border-bottom: 1px solid var(--dt-border); }
+    td { padding: 10px; border-bottom: 1px solid var(--dt-border); color: #cdd6f4; }
+    .val-ok { color: #4ade80; }
+    .val-err { color: #f87171; font-weight: 700; }
+    
+    /* NAV OVERRIDE */
+    .dt-nav { background: #161a23; padding: 8px 16px; display: flex; align-items: center; gap: 20px; border-bottom: 1px solid var(--dt-border); }
+    .dt-nav-brand { font-weight: 800; font-size: 15px; display: flex; align-items: center; gap: 10px; }
+    .dt-icon-sm { width: 20px; height: 20px; background: #1a9aef; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+  </style>
+</head>
+<body>
+
+<div class="dt-nav">
+  <a href="simulator.html" class="back-btn" style="margin-right:0">‹</a>
+  <div class="dt-nav-brand"><div class="dt-icon-sm">∑</div> Dynatrace Dashboards</div>
+  <div style="font-size:12px; color:#8892b0; margin-left:10px">SRE Dashboard - THRU • us-east-1</div>
+  <div style="margin-left:auto; display:flex; gap:10px">
+    <button class="theme-toggle" onclick="toggleTheme()" style="background:transparent; border:none; color:#8892b0; cursor:pointer">☀️</button>
+    <div style="font-size:12px; color:#8892b0">Last 24 hours ▾</div>
+  </div>
+</div>
+
+<div class="sre-container">
+  
+  <!-- STATUS RAIL -->
+  <div class="status-rail">
+    <div class="st-tile tile-status">
+      <div class="st-header">🚦 Status</div>
+      <div class="st-body">
+        <div class="st-box">
+          <div class="st-label">Problems</div>
+          <div class="st-value">0/1</div>
+        </div>
+      </div>
+    </div>
+    <div class="st-tile tile-slo">
+      <div class="st-header">✅ SLO Status</div>
+      <div class="st-body">
+        <div class="st-box">
+          <div class="st-label">Error</div>
+          <div class="st-value">100%</div>
+        </div>
+        <div class="st-box">
+          <div class="st-label">Latency</div>
+          <div class="st-value">99.9%</div>
+        </div>
+      </div>
+    </div>
+    <div class="st-tile tile-traffic">
+      <div class="st-header">📊 Traffic</div>
+      <div class="st-body">
+        <div class="st-box">
+          <div class="st-label">Request</div>
+          <div class="st-value">109k</div>
+        </div>
+        <div class="st-box">
+          <div class="st-label">Query</div>
+          <div class="st-value">125k</div>
+        </div>
+      </div>
+    </div>
+    <div class="st-tile tile-latency">
+      <div class="st-header">📈 Latency</div>
+      <div class="st-body">
+        <div class="st-box">
+          <div class="st-label">Request</div>
+          <div class="st-value">63ms</div>
+        </div>
+        <div class="st-box">
+          <div class="st-label">Query</div>
+          <div class="st-value">1.4ms</div>
+        </div>
+      </div>
+    </div>
+    <div class="st-tile tile-errors">
+      <div class="st-header">❌ Errors</div>
+      <div class="st-body">
+        <div class="st-box">
+          <div class="st-label">HTTP 5xx</div>
+          <div class="st-value">30</div>
+        </div>
+        <div class="st-box box-warn">
+          <div class="st-label">HTTP 4xx</div>
+          <div class="st-value">1k</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHARTS GRID -->
+  <div class="chart-grid">
+    <div class="chart-panel">
+      <div class="chart-title">Requests</div>
+      <div class="chart-area"><canvas id="c-requests"></canvas></div>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-title">Requests Latency</div>
+      <div class="chart-area"><canvas id="c-latency"></canvas></div>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-title">Requests Errors</div>
+      <div class="chart-area"><canvas id="c-errors"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ANALYSIS TABLES -->
+  <div class="analysis-row">
+    <div class="table-panel">
+      <div class="table-header">🔍 Service Analysis - Requests & Latency</div>
+      <table>
+        <thead>
+          <tr><th>Service</th><th>Method</th><th>Count</th><th>p99</th><th>Errors</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>billing-auth-svc</td><td>/user/login</td><td>38,265</td><td>3.03ms</td><td class="val-ok">0</td></tr>
+          <tr><td>billing-core-svc</td><td>/auth/isValid</td><td>15,412</td><td>3.17ms</td><td class="val-ok">0</td></tr>
+          <tr><td>payment-gate-svc</td><td>/post/pay</td><td>6,742</td><td>177.9ms</td><td class="val-err">481</td></tr>
+          <tr><td>billing-report-svc</td><td>/v1/generate</td><td>3,358</td><td>137.1ms</td><td class="val-ok">0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-panel">
+      <div class="table-header">💾 Database Analysis - Queries by Latency</div>
+      <table>
+        <thead>
+          <tr><th>Database</th><th>Query Pattern</th><th>Count</th><th>Latency</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>billing_users</td><td>SELECT username FROM users...</td><td>38,265</td><td>1.33ms</td></tr>
+          <tr><td>billing_ledger</td><td>SELECT token FROM tokens...</td><td>15,412</td><td>1.33ms</td></tr>
+          <tr><td>billing_audit</td><td>INSERT INTO audit_log...</td><td>14,442</td><td>941µs</td></tr>
+          <tr><td>billing_cache</td><td>GET session:user_id...</td><td>8,702</td><td>1.07ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function initChart(id, color, data) {
+    const ctx = document.getElementById(id).getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.map((_, i) => i),
+        datasets: [{
+          data: data,
+          borderColor: color,
+          backgroundColor: color.replace('1)', '0.1)'),
+          fill: true,
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.2
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: { 
+          x: { display: false }, 
+          y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8892b0', font: { size: 10 } } } 
+        },
+        maintainAspectRatio: false
+      }
+    });
+  }
+
+  function genData(n, val, dev) {
+    return Array.from({length: n}, () => val + (Math.random() - 0.5) * dev);
+  }
+
+  window.onload = () => {
+    initChart('c-requests', '#007bff', genData(40, 400, 100));
+    initChart('c-latency', '#7d44b1', genData(40, 12, 4));
+    initChart('c-errors', '#dc3545', genData(40, 2, 8));
+  };
+</script>
+</body>
+</html>

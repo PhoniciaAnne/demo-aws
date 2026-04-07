@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Billing App Disaster Recovery Command Center — Future Actions, Resilience Planning, and AWS Outage Simulation">
+  <title>Billing App · DR Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/landing.css">
+  <script src="scripts/theme.js"></script>
+</head>
+<body>
+
+  <!-- Animated aurora background -->
+  <div class="bg-aurora"></div>
+  <div class="particles" id="particles"></div>
+
+  <!-- Glass Navigation -->
+  <nav class="glass-nav">
+    <div class="nav-logo">
+      <span class="nav-icon">🛡️</span>
+      <span class="nav-brand">Billing <span class="accent">App</span></span>
+      <span class="nav-tag">DR Command Center</span>
+    </div>
+    <div class="nav-links">
+      <a href="simulator.html" class="nav-link">Simulator</a>
+      <a href="resilience-hub.html" class="nav-link">Resilience Hub</a>
+      <a href="nobl9.html" class="nav-link">Nobl9</a>
+    </div>
+    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+      <span class="theme-icon">🌙</span>
+    </button>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-badge">
+      <span class="badge-dot"></span>
+      AWS Resiliency &amp; Future Actions Showcase
+    </div>
+
+    <h1 class="hero-title">
+      Billing App<br>
+      <span class="title-gradient">DR Showcase</span>
+    </h1>
+
+    <p class="hero-subtitle">
+      A comprehensive disaster recovery simulation showcase for the <strong>Billing App</strong>.
+      Explore real-time outage scenarios, resilience posture, and SLO burn rates
+      across a fully automated AWS multi-region architecture.
+    </p>
+
+    <div class="hero-cta">
+      <a href="simulator.html" class="cta-btn primary" id="btn-enter-sim">
+        Enter Simulator
+        <span class="cta-arrow">→</span>
+      </a>
+      <a href="#plans" class="cta-btn secondary" id="btn-view-plans">
+        View Future Actions
+      </a>
+    </div>
+
+  </section>
+
+  <!-- Future Actions / Plans -->
+  <section class="plans-section" id="plans">
+    <div class="section-tag">Future Actions</div>
+    <h2 class="section-title">Strategic Resilience Goals</h2>
+
+    <div class="cards-grid">
+      <!-- Dynatrace Card -->
+      <div class="clay-card" id="card-dynatrace" onclick="window.location.href='dynatrace.html'">
+        <div class="clay-icon dt">🔬</div>
+        <div class="card-title">Reactive to Proactive using Dynatrace</div>
+        <div class="action-box">
+          <div class="action-label">WHAT</div>
+          <div class="action-text">We preventively check the critical applications for their availability</div>
+          <div class="action-label">WHY</div>
+          <div class="action-text">Accountability, fast diagnosis, shared ownership</div>
+        </div>
+      </div>
+
+      <!-- Resilience Hub Card -->
+      <div class="clay-card" id="card-resilience" onclick="window.location.href='resilience-hub.html'">
+        <div class="clay-icon rh">🛡️</div>
+        <div class="card-title">AWS Resilience Hub adoption</div>
+        <div class="action-box">
+          <div class="action-label">WHAT</div>
+          <div class="action-text">Assess all critical workloads for RTO/RPO gaps and resilience posture score</div>
+          <div class="action-label">WHY</div>
+          <div class="action-text">Governance baseline, prioritized remediation backlog</div>
+        </div>
+      </div>
+
+      <!-- Nobl9 Card -->
+      <div class="clay-card" id="card-nobl9" onclick="window.location.href='nobl9.html'">
+        <div class="clay-icon n9">📊</div>
+        <div class="card-title">Nobl9 SLO adoption</div>
+        <div class="action-box">
+          <div class="action-label">WHAT</div>
+          <div class="action-text">Define SLOs/SLIs for tier-1 and tier-2 services, tie to release and DR go/no-go</div>
+          <div class="action-label">WHY</div>
+          <div class="action-text">Replace gut-feel with data-driven reliability decisions</div>
+        </div>
+      </div>
+
+      <!-- Failover Card -->
+      <div class="clay-card" id="card-failover" onclick="window.location.href='simulator.html'">
+        <div class="clay-icon fo">⚡</div>
+        <div class="card-title">Failover automation</div>
+        <div class="action-box">
+          <div class="action-label">WHAT</div>
+          <div class="action-text">Automate health-check inversion, runbook execution, and post-DR validation</div>
+          <div class="action-label">WHY</div>
+          <div class="action-text">Eliminate manual steps that slow down and risk recovery</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Timeline Roadmap -->
+  <section class="roadmap-section">
+    <div class="section-tag">Roadmap</div>
+    <h2 class="section-title">Planned Enhancements</h2>
+
+    <div class="timeline">
+      <div class="tl-item done">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-date">Q1 2025</div>
+          <div class="tl-title">Multi-Region Active-Passive ✅</div>
+          <div class="tl-desc">DynamoDB Global Tables with us-east-1 as primary writer and us-west-2 as warm standby. Replication lag under 200ms.</div>
+        </div>
+      </div>
+      <div class="tl-item done">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-date">Q2 2025</div>
+          <div class="tl-title">Automated Remediation Pipeline ✅</div>
+          <div class="tl-desc">AWS Health → EventBridge → Lambda → Route53 health-check inversion. Fully automated failover under 5 min RTO with zero manual intervention.</div>
+        </div>
+      </div>
+      <div class="tl-item active">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-date">Q3 2025</div>
+          <div class="tl-title">SLO Observability Integration 🔄</div>
+          <div class="tl-desc">Nobl9 error-budget alerting integrated with PagerDuty. Burn-rate alerting at 2× and 14× thresholds across 30-day rolling windows.</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-date">Q4 2025</div>
+          <div class="tl-title">Active-Active Architecture</div>
+          <div class="tl-desc">Migrate to true active-active with DynamoDB Global Tables write forwarding enabled. Reduce RTO to near-zero with traffic split via Route53 weighted routing.</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-date">Q1 2026</div>
+          <div class="tl-title">Chaos Engineering Suite</div>
+          <div class="tl-desc">AWS FIS integration for continuous resilience validation. Quarterly GameDays with scheduled outage experiments across all 9 service tiers.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Next / CTA section -->
+  <section class="next-section">
+    <div class="next-inner">
+      <div class="next-text">
+        <div class="next-label">Ready to Explore?</div>
+        <div class="next-title">Start the DR Simulation</div>
+        <div class="next-desc">
+          Watch how the Billing App automatically recovers from real AWS service disruptions
+          with zero transaction loss and automated failover in under 5 minutes.
+        </div>
+      </div>
+      <a href="simulator.html" class="cta-btn primary large" id="btn-cta-sim">
+        Enter Simulator
+        <span class="cta-arrow">→</span>
+      </a>
+    </div>
+  </section>
+
+  <script>
+    // Generate floating particles
+    (function () {
+      const container = document.getElementById('particles');
+      for (let i = 0; i < 55; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.style.cssText = `
+          left: ${Math.random() * 100}%;
+          top: ${Math.random() * 100}%;
+          width: ${1 + Math.random() * 3}px;
+          height: ${1 + Math.random() * 3}px;
+          animation-delay: ${Math.random() * 10}s;
+          animation-duration: ${5 + Math.random() * 10}s;
+          opacity: ${0.15 + Math.random() * 0.5};
+        `;
+        container.appendChild(p);
+      }
+    })();
+
+    // Keyboard support for cards
+    document.querySelectorAll('.glass-card').forEach(card => {
+      card.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') card.click();
+      });
+    });
+  </script>
+</body>
+</html>

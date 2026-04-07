@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AWS DR Simulator — Billing App Multi-Region Failover with DynamoDB, RDS, Lambda, ECS and more">
+  <title>AWS DR Simulator — Billing App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="styles/dashboard.css">
+  <script src="scripts/theme.js"></script>
+</head>
+<body>
+
+<!-- HEADER -->
+<header id="app-header">
+  <div class="logo-group">
+    <a href="index.html" class="back-btn" title="Back to Home">‹</a>
+    <div class="logo-icon">🛡️</div>
+    <div class="logo-text">
+      <span class="logo-name">AWS<span class="logo-accent"> DR</span> Simulator</span>
+      <span class="logo-sub">Billing App · Multi-Region Automated Failover</span>
+    </div>
+  </div>
+  <div class="header-center">
+    <div class="status-chip" id="global-status-chip">
+      <div class="status-dot" id="global-dot"></div>
+      <span id="global-status-text">ALL SYSTEMS OPERATIONAL</span>
+    </div>
+  </div>
+  <div class="header-controls">
+    <div class="speed-control">
+      <span class="speed-label">Speed</span>
+      <button class="speed-btn active" id="speed-1x" onclick="setSpeed(1,this)">1×</button>
+      <button class="speed-btn" id="speed-2x" onclick="setSpeed(2,this)">2×</button>
+      <button class="speed-btn" id="speed-5x" onclick="setSpeed(5,this)">5×</button>
+    </div>
+    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+      <span class="theme-icon">🌙</span>
+    </button>
+    <button class="ctrl-btn reset-btn" onclick="resetSim()" id="btn-reset">↺ Reset</button>
+    <button class="ctrl-btn trigger-btn" onclick="startSim(null)" id="btn-trigger">💥 Trigger RANDOM Outage</button>
+  </div>
+</header>
+
+<!-- INCIDENT BANNER -->
+<div class="incident-banner" id="incident-banner">
+  <span class="inc-icon">🚨</span>
+  <span id="inc-msg">DISASTER RECOVERY IN PROGRESS — Automated failover engaged</span>
+  <span class="inc-timer" id="inc-timer">00:00</span>
+</div>
+
+<!-- MAIN -->
+<main class="sim-layout">
+
+  <!-- LEFT: Map + Console -->
+  <div class="left-col">
+    <div class="map-panel">
+      <div class="map-label">BILLING APP  ·  LIVE TOPOLOGY</div>
+      <svg id="arch-svg" viewBox="0 0 740 435" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+        <defs>
+          <pattern id="grid-bg" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M40 0L0 0 0 40" fill="none" stroke="rgba(255,255,255,0.025)" stroke-width="1"/>
+          </pattern>
+          <marker id="mk-healthy" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#22d3a5"/></marker>
+          <marker id="mk-dim"     markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#1e3050"/></marker>
+          <marker id="mk-danger"  markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#ef4444"/></marker>
+          <marker id="mk-purple"  markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#a78bfa"/></marker>
+        </defs>
+
+        <rect width="740" height="435" fill="#060a12"/>
+        <rect width="740" height="435" fill="url(#grid-bg)"/>
+
+        <line x1="0" y1="125" x2="740" y2="125" stroke="rgba(255,255,255,0.04)" stroke-width="1" stroke-dasharray="6,4"/>
+        <line x1="0" y1="370" x2="740" y2="370" stroke="rgba(255,255,255,0.04)" stroke-width="1" stroke-dasharray="6,4"/>
+
+        <text x="8" y="16"  font-family="Inter" font-size="8.5" fill="rgba(255,255,255,0.13)" font-weight="700" letter-spacing="1.5">USER TRAFFIC</text>
+        <text x="8" y="138" font-family="Inter" font-size="8.5" fill="rgba(255,255,255,0.13)" font-weight="700" letter-spacing="1.5">APPLICATION REGIONS</text>
+        <text x="8" y="382" font-family="Inter" font-size="8.5" fill="rgba(255,255,255,0.13)" font-weight="700" letter-spacing="1.5">AUTOMATION CONTROL PLANE</text>
+
+        <!-- Arrows -->
+        <line x1="370" y1="48" x2="370" y2="63" stroke="#22d3a5" stroke-width="2" marker-end="url(#mk-healthy)" id="arrow-users-r53"/>
+        <path id="path-to-primary"   d="M305,108 C270,132 220,130 167,135" fill="none" stroke="#22d3a5" stroke-width="2.5" marker-end="url(#mk-healthy)"/>
+        <path id="path-to-secondary" d="M435,108 C470,132 520,130 573,135" fill="none" stroke="#1e3050" stroke-width="2"   stroke-dasharray="8,4" marker-end="url(#mk-dim)"/>
+
+        <!-- DynamoDB Global Replication line + label — centered & visible -->
+        <line id="replication-line" x1="316" y1="254" x2="432" y2="254" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.6"/>
+        <marker id="mk-blue-l" markerWidth="6" markerHeight="5" refX="0" refY="2.5" orient="auto"><path d="M6 0L0 2.5L6 5Z" fill="#3b82f6" opacity="0.7"/></marker>
+        <marker id="mk-blue-r" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0 0L6 2.5L0 5Z" fill="#3b82f6" opacity="0.7"/></marker>
+        <line x1="316" y1="254" x2="432" y2="254" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.5" marker-start="url(#mk-blue-l)" marker-end="url(#mk-blue-r)"/>
+        <rect x="334" y="242" width="72" height="14" rx="3" fill="#060a12" opacity="0.85"/>
+        <text id="replication-label" x="370" y="252" text-anchor="middle" font-family="Inter" font-size="8" fill="#3b82f6" font-weight="700" letter-spacing="0.8" opacity="0.9">GLOBAL REPLICATION</text>
+
+        <line id="arrow-h-eb"   x1="178" y1="405" x2="206" y2="405" stroke="#1e3050" stroke-width="1.5" marker-end="url(#mk-dim)"/>
+        <line id="arrow-eb-l"   x1="374" y1="405" x2="402" y2="405" stroke="#1e3050" stroke-width="1.5" marker-end="url(#mk-dim)"/>
+        <path id="path-lambda-r53" d="M560,382 C610,300 580,200 440,108" fill="none" stroke="#1e3050" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#mk-dim)"/>
+
+        <!-- Users -->
+        <rect x="290" y="8" width="160" height="38" rx="8" fill="#0d1524" stroke="#1a2540" stroke-width="1.5"/>
+        <text x="370" y="32" text-anchor="middle" font-family="Inter" font-size="12" fill="#94a3b8" font-weight="600">👥 50,000 req / min</text>
+
+        <!-- Route53 -->
+        <g id="node-r53">
+          <rect x="248" y="63" width="244" height="50" rx="10" fill="#0d1524" stroke="#22d3a5" stroke-width="1.5" id="rect-r53"/>
+          <text x="278" y="84" font-family="Inter" font-size="13" fill="#22d3a5" font-weight="700">🔀 Amazon Route 53</text>
+          <text x="278" y="101" font-family="Inter" font-size="10" fill="#64748b" id="r53-policy">Active-Passive Failover Policy</text>
+        </g>
+
+        <!-- PRIMARY REGION -->
+        <g id="region-primary">
+          <rect x="12" y="146" width="318" height="219" rx="12" fill="rgba(34,211,165,0.04)" stroke="#22d3a5" stroke-width="1.5" id="rect-primary"/>
+          <text x="30" y="166" font-family="Inter" font-size="10" fill="#22d3a5" font-weight="700" letter-spacing="1.2" id="label-primary">PRIMARY  ·  us-east-1</text>
+          <circle cx="296" cy="162" r="5" fill="#22d3a5" id="dot-primary"/>
+          <text x="306" y="166" font-family="Inter" font-size="10" fill="#22d3a5" font-weight="600" id="status-primary">HEALTHY</text>
+
+          <!-- Row 1: API GW + Lambda -->
+          <rect x="26" y="174" width="290" height="44" rx="8" fill="#0d1524" stroke="#1a2540" stroke-width="1"/>
+          <text x="44" y="192" font-family="Inter" font-size="11" fill="#4a5568" font-weight="600">🌐  API Gateway  ·  ⚡ Lambda (Billing)</text>
+          <text x="44" y="210" font-family="JetBrains Mono" font-size="10" fill="#22d3a5" id="alb-p-stat">● Active — Billing API v2.4  ·  12ms</text>
+
+          <!-- Row 2: DynamoDB (highlighted) -->
+          <rect x="26" y="232" width="290" height="44" rx="8" fill="#0d1830" stroke="#3b82f6" stroke-width="1.5" id="ddb-primary-rect"/>
+          <text x="44" y="250" font-family="Inter" font-size="11" fill="#60a5fa" font-weight="700">🗄️  DynamoDB  (Writer · CRITICAL PATH)</text>
+          <text x="44" y="268" font-family="JetBrains Mono" font-size="10" fill="#22d3a5" id="ec2-p-stat">● Writer Active — 0ms lag · 4,200 WCU</text>
+
+          <!-- Row 3: RDS + S3 -->
+          <rect x="26" y="290" width="290" height="44" rx="8" fill="#0d1524" stroke="#1a2540" stroke-width="1"/>
+          <text x="44" y="308" font-family="Inter" font-size="11" fill="#4a5568" font-weight="600">💾  RDS (Audit Log)  ·  🪣 S3 (Reports)</text>
+          <text x="44" y="326" font-family="JetBrains Mono" font-size="10" fill="#22d3a5" id="rds-p-stat">● RDS Active · S3 Available  ·  2s sync</text>
+        </g>
+
+        <!-- SECONDARY REGION -->
+        <g id="region-secondary">
+          <rect x="418" y="146" width="318" height="219" rx="12" fill="rgba(30,48,80,0.3)" stroke="#1e3050" stroke-width="1.5" stroke-dasharray="6,3" id="rect-secondary"/>
+          <text x="436" y="166" font-family="Inter" font-size="10" fill="#334155" font-weight="700" letter-spacing="1.2" id="label-secondary">WARM STANDBY  ·  us-west-2</text>
+          <circle cx="702" cy="162" r="5" fill="#334155" id="dot-secondary"/>
+          <text x="712" y="166" font-family="Inter" font-size="10" fill="#334155" font-weight="600" id="status-secondary">STANDBY</text>
+
+          <!-- Row 1 -->
+          <rect x="432" y="174" width="290" height="44" rx="8" fill="#0a0f1a" stroke="#1a2540" stroke-width="1"/>
+          <text x="450" y="192" font-family="Inter" font-size="11" fill="#2d3748" font-weight="600">🌐  API Gateway  ·  ⚡ Lambda (Warm)</text>
+          <text x="450" y="210" font-family="JetBrains Mono" font-size="10" fill="#334155" id="alb-s-stat">● Warm — Ready to accept traffic</text>
+
+          <!-- Row 2: DynamoDB Global Table -->
+          <rect x="432" y="232" width="290" height="44" rx="8" fill="#0a0f1a" stroke="#1e3050" stroke-width="1" id="ddb-secondary-rect"/>
+          <text x="450" y="250" font-family="Inter" font-size="11" fill="#2d3748" font-weight="700">🗄️  DynamoDB  (Global Table Replica)</text>
+          <text x="450" y="268" font-family="JetBrains Mono" font-size="10" fill="#334155" id="ec2-s-stat">● Replica — 180ms replication lag</text>
+
+          <!-- Row 3 -->
+          <rect x="432" y="290" width="290" height="44" rx="8" fill="#0a0f1a" stroke="#1a2540" stroke-width="1"/>
+          <text x="450" y="308" font-family="Inter" font-size="11" fill="#2d3748" font-weight="600">📨  SQS  ·  🔔 SNS  ·  🚌 EventBridge</text>
+          <text x="450" y="326" font-family="JetBrains Mono" font-size="10" fill="#334155" id="rds-s-stat">● Queue depth 0 · Standby</text>
+        </g>
+
+        <!-- CONTROL PLANE NODES -->
+        <g id="node-health">
+          <rect x="12" y="383" width="166" height="46" rx="8" fill="#0d1524" stroke="#1e3050" stroke-width="1.5" id="rect-health"/>
+          <text x="95" y="403" text-anchor="middle" font-family="Inter" font-size="11" fill="#334155" font-weight="700" id="health-title">AWS Health</text>
+          <text x="95" y="419" text-anchor="middle" font-family="Inter" font-size="9.5" fill="#334155" id="health-sub">Personal Health Dashboard</text>
+        </g>
+        <g id="node-eb">
+          <rect x="208" y="383" width="166" height="46" rx="8" fill="#0d1524" stroke="#1e3050" stroke-width="1.5" id="rect-eb"/>
+          <text x="291" y="403" text-anchor="middle" font-family="Inter" font-size="11" fill="#334155" font-weight="700" id="eb-title">EventBridge</text>
+          <text x="291" y="419" text-anchor="middle" font-family="Inter" font-size="9.5" fill="#334155" id="eb-sub">Rule: DR-AutoFailover</text>
+        </g>
+        <g id="node-lambda">
+          <rect x="404" y="383" width="166" height="46" rx="8" fill="#0d1524" stroke="#1e3050" stroke-width="1.5" id="rect-lambda"/>
+          <text x="487" y="403" text-anchor="middle" font-family="Inter" font-size="11" fill="#334155" font-weight="700" id="lambda-title">Lambda</text>
+          <text x="487" y="419" text-anchor="middle" font-family="Inter" font-size="9.5" fill="#334155" id="lambda-sub">DR-HealthCheck-Inverter</text>
+        </g>
+
+        <!-- Traffic dots -->
+        <g id="dots-primary">
+          <circle r="4.5" fill="#22d3a5" opacity="0.85"><animateMotion dur="2s" repeatCount="indefinite" begin="0s"><mpath href="#path-to-primary"/></animateMotion></circle>
+          <circle r="4.5" fill="#22d3a5" opacity="0.85"><animateMotion dur="2s" repeatCount="indefinite" begin="0.66s"><mpath href="#path-to-primary"/></animateMotion></circle>
+          <circle r="4.5" fill="#22d3a5" opacity="0.85"><animateMotion dur="2s" repeatCount="indefinite" begin="1.33s"><mpath href="#path-to-primary"/></animateMotion></circle>
+        </g>
+        <g id="dots-secondary" visibility="hidden">
+          <circle r="4.5" fill="#22d3a5" opacity="0.85"><animateMotion dur="2s" repeatCount="indefinite" begin="0s"><mpath href="#path-to-secondary"/></animateMotion></circle>
+          <circle r="4.5" fill="#22d3a5" opacity="0.85"><animateMotion dur="2s" repeatCount="indefinite" begin="0.66s"><mpath href="#path-to-secondary"/></animateMotion></circle>
+          <circle r="4.5" fill="#22d3a5" opacity="0.85"><animateMotion dur="2s" repeatCount="indefinite" begin="1.33s"><mpath href="#path-to-secondary"/></animateMotion></circle>
+        </g>
+        <g id="dots-lambda-r53" visibility="hidden">
+          <circle r="4" fill="#a78bfa" opacity="0.9"><animateMotion dur="2.5s" repeatCount="indefinite" begin="0s"><mpath href="#path-lambda-r53"/></animateMotion></circle>
+          <circle r="4" fill="#a78bfa" opacity="0.9"><animateMotion dur="2.5s" repeatCount="indefinite" begin="1.25s"><mpath href="#path-lambda-r53"/></animateMotion></circle>
+        </g>
+      </svg>
+    </div>
+
+    <!-- Console -->
+    <div class="console-panel">
+      <div class="console-header">
+        <div class="console-live"><div class="live-dot"></div>LIVE</div>
+        <span class="console-title">System Event Console</span>
+        <span class="console-count" id="log-count">1 event</span>
+      </div>
+      <div class="console-body" id="console-body">
+        <div class="log-line">
+          <span class="log-ts">[00:00]</span>
+          <span class="log-icon">✅</span>
+          <span class="log-msg success">System initialized — Billing App fully operational in us-east-1</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div class="right-col">
+
+    <!-- AWS SERVICE HEALTH DASHBOARD -->
+    <div class="panel health-panel">
+      <div class="panel-header">
+        <div class="panel-logo aws-icon">⊕</div>
+        <div>
+          <div class="panel-name">AWS Service Health</div>
+          <div class="panel-sub">Personal Health Dashboard · 9 services</div>
+        </div>
+        <div class="panel-badge" id="health-all-badge">ALL OK</div>
+      </div>
+
+      <div class="svc-list" id="svc-list">
+        <!-- DynamoDB — expandable -->
+        <div class="svc-row expandable" id="svc-row-dynamodb" onclick="toggleDetail('dynamodb'); startSim('dynamodb')">
+          <span class="svc-dot" id="sdot-dynamodb"></span>
+          <span class="svc-em">🗄️</span>
+          <span class="svc-name">Amazon DynamoDB</span>
+          <span class="svc-badge ok" id="sbadge-dynamodb">OK</span>
+          <span class="svc-chevron" id="svc-chev-dynamodb">›</span>
+        </div>
+        <div class="svc-region-detail" id="sdetail-dynamodb">
+          <div class="region-row"><span class="rdot" id="rdot-ddb-east"></span><span class="rname">us-east-1</span><span class="rstat" id="rstat-ddb-east">Operating Normally</span></div>
+          <div class="region-row"><span class="rdot" id="rdot-ddb-west"></span><span class="rname">us-west-2</span><span class="rstat" id="rstat-ddb-west">Operating Normally</span></div>
+          <div class="region-row"><span class="rdot" id="rdot-ddb-eu"></span><span class="rname">eu-west-1</span><span class="rstat" id="rstat-ddb-eu">Operating Normally</span></div>
+        </div>
+
+        <div class="svc-row expandable" id="svc-row-rds" onclick="startSim('rds')">
+          <span class="svc-dot" id="sdot-rds"></span><span class="svc-em">💾</span>
+          <span class="svc-name">Amazon RDS</span>
+          <span class="svc-badge ok" id="sbadge-rds">OK</span>
+        </div>
+        <div class="svc-row expandable" id="svc-row-s3" onclick="startSim('s3')">
+          <span class="svc-dot" id="sdot-s3"></span><span class="svc-em">🪣</span>
+          <span class="svc-name">Amazon S3</span>
+          <span class="svc-badge ok" id="sbadge-s3">OK</span>
+        </div>
+        <div class="svc-row expandable" id="svc-row-lambda" onclick="startSim('lambda')">
+          <span class="svc-dot" id="sdot-lambda"></span><span class="svc-em">⚡</span>
+          <span class="svc-name">AWS Lambda</span>
+          <span class="svc-badge ok" id="sbadge-lambda">OK</span>
+        </div>
+        <div class="svc-row expandable" id="svc-row-apigw" onclick="startSim('apigw')">
+          <span class="svc-dot" id="sdot-apigw"></span><span class="svc-em">🌐</span>
+          <span class="svc-name">API Gateway</span>
+          <span class="svc-badge ok" id="sbadge-apigw">OK</span>
+        </div>
+        <div class="svc-row expandable" id="svc-row-sqs" onclick="startSim('sqs')">
+          <span class="svc-dot" id="sdot-sqs"></span><span class="svc-em">📨</span>
+          <span class="svc-name">Amazon SQS</span>
+          <span class="svc-badge ok" id="sbadge-sqs">OK</span>
+        </div>
+        <div class="svc-row expandable" id="svc-row-sns" onclick="startSim('sns')">
+          <span class="svc-dot" id="sdot-sns"></span><span class="svc-em">🔔</span>
+          <span class="svc-name">Amazon SNS</span>
+          <span class="svc-badge maintenance" id="sbadge-sns">MAINT</span>
+        </div>
+        <div class="svc-row expandable" id="svc-row-eventbridge" onclick="startSim('eventbridge')">
+          <span class="svc-dot" id="sdot-eventbridge"></span><span class="svc-em">🚌</span>
+          <span class="svc-name">EventBridge</span>
+          <span class="svc-badge ok" id="sbadge-eventbridge">OK</span>
+        </div>
+        <div class="svc-row expandable" id="svc-row-ecs" onclick="startSim('ecs')">
+          <span class="svc-dot" id="sdot-ecs"></span><span class="svc-em">🐳</span>
+          <span class="svc-name">Amazon ECS</span>
+          <span class="svc-badge ok" id="sbadge-ecs">OK</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESILIENCE HUB — clickable header navigates to dashboard -->
+    <div class="panel rh-panel">
+      <div class="panel-header panel-header-link" id="rh-panel-header" onclick="window.location.href='resilience-hub.html'" title="Open AWS Resilience Hub Dashboard" style="cursor:pointer">
+        <div class="panel-logo rh-logo">🏛️</div>
+        <div>
+          <div class="panel-name">AWS Resilience Hub <span class="panel-nav-hint">↗</span></div>
+          <div class="panel-sub">Billing App · Posture</div>
+        </div>
+        <div class="panel-badge" id="rh-badge">RESILIENT</div>
+      </div>
+      <div class="rh-grid">
+        <div class="rh-metric"><div class="rh-label">Resiliency Score</div><div class="rh-value" id="rh-score">84 / 100</div></div>
+        <div class="rh-metric"><div class="rh-label">Target RTO</div><div class="rh-value">5 min</div></div>
+        <div class="rh-metric"><div class="rh-label">Actual RTO</div><div class="rh-value" id="rh-rto">—</div></div>
+        <div class="rh-metric"><div class="rh-label">Target RPO</div><div class="rh-value">1 min</div></div>
+        <div class="rh-metric"><div class="rh-label">Policy Status</div><div class="rh-value" id="rh-policy">Within Policy</div></div>
+        <div class="rh-metric"><div class="rh-label">App Tier</div><div class="rh-value" style="color:#ff9900">Mission Critical</div></div>
+      </div>
+      <div class="rh-status-bar" id="rh-status-bar">
+        <span id="rh-status-icon">✅</span>
+        <span id="rh-status-msg">All disruption types within RTO/RPO targets. DynamoDB Global Tables configured.</span>
+      </div>
+    </div>
+
+    <!-- DYNATRACE — clickable header navigates to dashboard -->
+    <div class="panel dt-panel">
+      <div class="panel-header panel-header-link" id="dt-panel-header" onclick="window.location.href='dynatrace.html'" title="Open Dynatrace Dashboard" style="cursor:pointer">
+        <div class="panel-logo dt-logo">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <circle cx="11" cy="11" r="11" fill="#1a9aef"/>
+            <path d="M6 15L11 7L16 15" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div>
+          <div class="panel-name">Dynatrace <span class="panel-nav-hint">↗</span></div>
+          <div class="panel-sub">DynamoDB · Real-Time Observability</div>
+        </div>
+        <div class="panel-badge dt-badge" id="dt-badge">NOMINAL</div>
+      </div>
+      <div class="dt-metrics-row">
+        <div class="dt-metric"><div class="dt-metric-val" id="dt-throughput">4.2k</div><div class="dt-metric-label">ops/sec</div></div>
+        <div class="dt-metric"><div class="dt-metric-val" id="dt-errors" style="color:#22d3a5">0.0%</div><div class="dt-metric-label">throttles</div></div>
+        <div class="dt-metric"><div class="dt-metric-val" id="dt-latency">3.8ms</div><div class="dt-metric-label">p99 latency</div></div>
+      </div>
+      <div class="chart-wrap"><canvas id="dt-chart"></canvas></div>
+      <div class="dt-alert" id="dt-alert" style="display:none">
+        <span class="dt-alert-icon">🔴</span>
+        <span id="dt-alert-msg">PROBLEM: DynamoDB Service Disruption — us-east-1</span>
+      </div>
+    </div>
+
+    <!-- NOBL9 — clickable header navigates to dashboard -->
+    <div class="panel nobl9-panel">
+      <div class="panel-header panel-header-link" id="n9-panel-header" onclick="window.location.href='nobl9.html'" title="Open Nobl9 SLO Dashboard" style="cursor:pointer">
+        <div class="panel-logo n9-logo">N⁰</div>
+        <div>
+          <div class="panel-name">Nobl9 <span class="panel-nav-hint">↗</span></div>
+          <div class="panel-sub">SLO · Error Budget Tracking</div>
+        </div>
+        <div class="panel-badge n9-badge" id="n9-badge">ON TRACK</div>
+      </div>
+      <div class="n9-slo-row">
+        <div class="n9-slo-info">
+          <div class="n9-slo-name">Billing API SLO</div>
+          <div class="n9-slo-target">Target: <strong>99.95%</strong> · Window: 30 days</div>
+        </div>
+        <div class="n9-budget-big">
+          <div class="n9-budget-val" id="n9-budget-val">94.3%</div>
+          <div class="n9-budget-label">Budget Left</div>
+        </div>
+      </div>
+      <div class="chart-wrap nobl9-chart-wrap"><canvas id="n9-chart"></canvas></div>
+      <div class="n9-burn-row">
+        <div class="n9-burn-item"><span class="n9-burn-label">Burn Rate</span><span class="n9-burn-val" id="n9-burn">0.8×</span></div>
+        <div class="n9-burn-item"><span class="n9-burn-label">Time to Exhaustion</span><span class="n9-burn-val" id="n9-tte">37 days</span></div>
+      </div>
+    </div>
+
+  </div><!-- /right-col -->
+</main>
+
+<script src="scripts/app.js"></script>
+</body>
+</html>

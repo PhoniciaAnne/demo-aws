@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AWS Resilience Hub — BillingApp Resiliency Dashboard showing RTO, RPO, assessment scores and fault injection experiments">
+  <title>AWS Resilience Hub — BillingApp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="scripts/theme.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #0d1117;
+      --bg-card:  #161b22;
+      --bg-deep:  #0a0d13;
+      --border:   #21262d;
+      --text:     #e6edf3;
+      --text-dim: #8b949e;
+      --text-muted: #484f58;
+      --orange:   #ff9900;
+      --green:    #3fb950;
+      --red:      #f85149;
+      --blue:     #58a6ff;
+      --yellow:   #d29922;
+      --font:     'Inter', -apple-system, sans-serif;
+      --mono:     'JetBrains Mono', monospace;
+    }
+    [data-theme="light"] {
+      --bg:       #f6f8fa;
+      --bg-card:  #ffffff;
+      --bg-deep:  #f0f3f6;
+      --border:   #d0d7de;
+      --text:     #1f2328;
+      --text-dim: #57606a;
+      --text-muted: #8c959f;
+    }
+    html, body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font); transition: background 0.3s, color 0.3s; font-size: 13px; }
+
+    /* ── TOP NAV ── */
+    .rh-topbar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 20px; height: 48px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .rh-topbar-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 700; font-size: 14px; color: var(--orange);
+    }
+    .rh-topbar-logo svg { width: 22px; height: 22px; fill: var(--orange); }
+    .rh-breadcrumb {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--text-dim);
+    }
+    .rh-breadcrumb a { color: var(--blue); text-decoration: none; }
+    .rh-breadcrumb a:hover { text-decoration: underline; }
+    .rh-breadcrumb span { color: var(--text-muted); }
+    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .theme-toggle-rh {
+      width: 32px; height: 32px; border-radius: 8px;
+      border: 1px solid var(--border); background: transparent;
+      cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .theme-toggle-rh:hover { background: rgba(255,255,255,0.06); transform: rotate(20deg); }
+    [data-theme="light"] .theme-toggle-rh:hover { background: rgba(0,0,0,0.05); }
+
+    /* ── MAIN LAYOUT ── */
+    .rh-layout { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
+
+    /* ── PAGE HEADER ── */
+    .rh-page-header {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 20px;
+    }
+    .rh-app-icon {
+      width: 44px; height: 44px; border-radius: 10px;
+      background: rgba(255,153,0,0.15); border: 1px solid rgba(255,153,0,0.4);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+    .rh-app-title { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+    .rh-policy-badge {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 6px;
+      background: rgba(248,81,73,0.12);
+      border: 1px solid rgba(248,81,73,0.3);
+      font-size: 12px; font-weight: 600;
+      color: var(--red);
+    }
+    .rh-policy-badge.ok { background: rgba(63,185,80,0.1); border-color: rgba(63,185,80,0.3); color: var(--green); }
+    .policy-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+    /* ── ACTION BTN ── */
+    .rh-actions-btn {
+      margin-left: auto;
+      padding: 7px 14px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--bg-card);
+      color: var(--text); font-size: 12px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      transition: all 0.2s;
+    }
+    .rh-actions-btn:hover { background: rgba(255,255,255,0.06); border-color: var(--text-muted); }
+    [data-theme="light"] .rh-actions-btn:hover { background: rgba(0,0,0,0.04); }
+
+    /* ── WORKFLOW SECTION ── */
+    .rh-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+    .rh-section-header {
+      padding: 14px 20px;
+      font-size: 13px; font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+      cursor: pointer; user-select: none;
+    }
+    .rh-section-header:hover { background: rgba(255,255,255,0.02); }
+    [data-theme="light"] .rh-section-header:hover { background: rgba(0,0,0,0.02); }
+    .rh-section-chevron { font-size: 14px; color: var(--text-dim); transition: transform 0.2s; }
+    .rh-section-chevron.open { transform: rotate(90deg); }
+
+    .workflow-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      padding: 28px 20px 24px;
+    }
+    .workflow-step {
+      display: flex; flex-direction: column;
+      align-items: center; text-align: center;
+      padding: 0 16px;
+      position: relative;
+    }
+    .workflow-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      right: 0; top: 36px;
+      width: 1px; height: 40px;
+      background: var(--border);
+    }
+    .ws-icon {
+      width: 56px; height: 56px;
+      border-radius: 10px;
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; margin-bottom: 14px;
+      background: var(--bg-deep);
+      transition: all 0.2s;
+    }
+    .ws-icon.done { border-color: var(--green); background: rgba(63,185,80,0.08); }
+    .ws-icon.active { border-color: var(--orange); background: rgba(255,153,0,0.08); }
+    .ws-step-num {
+      font-size: 11px; font-weight: 700;
+      color: var(--text-muted); margin-bottom: 4px;
+    }
+    .ws-step-num .status-done { color: var(--green); }
+    .ws-step-num .status-active { color: var(--orange); }
+    .ws-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+    .ws-desc { font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 14px; }
+    .ws-btn {
+      padding: 6px 14px; border-radius: 6px;
+      font-size: 11px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+      border: 1px solid;
+    }
+    .ws-btn.secondary { background: transparent; border-color: var(--border); color: var(--text); }
+    .ws-btn.secondary:hover { border-color: var(--text-muted); background: rgba(255,255,255,0.04); }
+    .ws-btn.primary-orange { background: var(--orange); border-color: var(--orange); color: #fff; }
+    .ws-btn.primary-orange:hover { filter: brightness(1.1); }
+    .ws-btn.disabled { opacity: 0.35; cursor: not-allowed; border-color: var(--border); color: var(--text-muted); background: transparent; }
+
+    /* ── TABS ── */
+    .rh-tabs {
+      display: flex; gap: 0;
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      overflow-x: auto;
+    }
+    .rh-tab {
+      padding: 12px 16px;
+      font-size: 12px; font-weight: 600;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      transition: all 0.15s;
+      margin-bottom: -1px;
+    }
+    .rh-tab:hover { color: var(--text); }
+    .rh-tab.active { color: var(--orange); border-bottom-color: var(--orange); }
+
+    /* ── ASSESSMENT PANEL ── */
+    .rh-assessment-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .rh-assessment-title { font-size: 14px; font-weight: 600; }
+    .rh-assessment-count {
+      font-size: 12px; color: var(--text-dim);
+    }
+    .rh-assessment-actions { margin-left: auto; display: flex; gap: 8px; }
+    .rh-btn {
+      padding: 6px 14px; border-radius: 6px;
+      font-size: 12px; font-weight: 600;
+      cursor: pointer; border: 1px solid var(--border);
+      background: var(--bg-card); color: var(--text);
+      transition: all 0.2s;
+    }
+    .rh-btn:hover { background: rgba(255,255,255,0.05); }
+    .rh-btn.ctaOrange { background: var(--orange); border-color: var(--orange); color: #fff; }
+    .rh-btn.ctaOrange:hover { filter: brightness(1.1); }
+    .rh-btn.disabled { opacity: 0.4; cursor: not-allowed; }
+    [data-theme="light"] .rh-btn:hover { background: rgba(0,0,0,0.04); }
+
+    .search-box {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--bg-deep);
+      font-size: 12px; color: var(--text-dim);
+      width: 280px;
+    }
+    .rh-pagination {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--text-dim);
+    }
+    .pg-btn {
+      width: 28px; height: 28px; border-radius: 6px;
+      border: 1px solid var(--border); background: transparent;
+      cursor: pointer; color: var(--text-dim);
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .pg-btn:hover { background: rgba(255,255,255,0.06); }
+    [data-theme="light"] .pg-btn:hover { background: rgba(0,0,0,0.04); }
+
+    /* ── TABLE ── */
+    .rh-table { width: 100%; border-collapse: collapse; }
+    .rh-table th {
+      padding: 10px 16px;
+      background: var(--bg-deep);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px; font-weight: 700; color: var(--text-dim);
+      text-align: left; white-space: nowrap;
+    }
+    .rh-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      vertical-align: middle;
+    }
+    .rh-table tr:last-child td { border-bottom: none; }
+    .rh-table tr:hover td { background: rgba(255,255,255,0.02); }
+    [data-theme="light"] .rh-table tr:hover td { background: rgba(0,0,0,0.02); }
+    .rh-table input[type=checkbox] { accent-color: var(--orange); }
+
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 8px; border-radius: 4px;
+      font-size: 11px; font-weight: 600;
+    }
+    .status-badge.success { color: var(--green); background: rgba(63,185,80,0.1); }
+    .status-badge.policy-breached { color: var(--red); background: rgba(248,81,73,0.1); }
+    .status-badge.warning { color: var(--yellow); background: rgba(210,153,34,0.1); }
+    .rh-link { color: var(--blue); text-decoration: none; font-weight: 500; }
+    .rh-link:hover { text-decoration: underline; }
+
+    /* ── SCORE CARDS ── */
+    .score-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+      gap: 14px; padding: 20px;
+    }
+    .score-card {
+      background: var(--bg-deep); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px 18px;
+    }
+    .score-card-label { font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; }
+    .score-card-val { font-family: var(--mono); font-size: 28px; font-weight: 800; color: var(--green); letter-spacing: -1px; }
+    .score-card-val.warning { color: var(--yellow); }
+    .score-card-val.danger { color: var(--red); }
+    .score-card-sub { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+
+    /* ── EXPERIMENT LIST ── */
+    .experiment-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .experiment-row:last-child { border-bottom: none; }
+    .exp-icon { font-size: 20px; }
+    .exp-name { font-size: 12px; font-weight: 600; flex: 1; }
+    .exp-status {
+      padding: 3px 8px; border-radius: 4px;
+      font-size: 11px; font-weight: 600;
+    }
+    .exp-status.ready { color: var(--green); background: rgba(63,185,80,0.1); }
+    .exp-status.pending { color: var(--yellow); background: rgba(210,153,34,0.1); }
+    .exp-date { font-size: 11px; color: var(--text-muted); font-family: var(--mono); }
+
+    /* ── CHART AREA ── */
+    .chart-area { padding: 20px; }
+    .chart-area canvas { max-height: 200px; }
+
+    /* ── TOAST ── */
+    .rh-toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 12px 18px; border-radius: 8px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      font-size: 12px; font-weight: 600; color: var(--text);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      opacity: 0; transform: translateY(10px);
+      transition: all 0.3s;
+      z-index: 200;
+    }
+    .rh-toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="rh-topbar">
+  <div class="rh-topbar-logo">
+    <svg viewBox="0 0 24 24"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.18L20 8.5v7l-8 4-8-4v-7l8-4.32z"/></svg>
+    AWS Resilience Hub
+  </div>
+  <div class="rh-breadcrumb">
+    <span>›</span>
+    <a href="index.html">Home</a>
+    <span>›</span>
+    <span>Applications</span>
+    <span>›</span>
+    <span>BillingApp</span>
+  </div>
+  <div class="topbar-right">
+    <button class="theme-toggle-rh" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+      <span class="theme-icon">🌙</span>
+    </button>
+    <a href="simulator.html" style="font-size:12px;color:var(--blue);text-decoration:none;padding:0 8px;">← Simulator</a>
+  </div>
+</div>
+
+<div class="rh-layout">
+
+  <!-- PAGE HEADER -->
+  <div class="rh-page-header">
+    <div class="rh-app-icon">💳</div>
+    <div>
+      <div class="rh-app-title">BillingApp</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:3px;">arn:aws:resiliencehub:us-east-1:142824:app/billing-app</div>
+    </div>
+    <div class="rh-policy-badge" id="policy-badge">
+      <span class="policy-dot"></span>
+      Policy breached
+    </div>
+    <button class="rh-actions-btn" id="btn-actions" onclick="showToast('Actions menu — Deploy, Clone, Delete')">
+      Actions ▾
+    </button>
+  </div>
+
+  <!-- SCORE SUMMARY CARDS -->
+  <div class="rh-section" style="margin-bottom:16px">
+    <div class="score-grid">
+      <div class="score-card">
+        <div class="score-card-label">Resiliency Score</div>
+        <div class="score-card-val" id="rh-score-big">84<span style="font-size:16px;font-weight:400;color:var(--text-dim)">/100</span></div>
+        <div class="score-card-sub">↑ +3 from last assessment</div>
+      </div>
+      <div class="score-card">
+        <div class="score-card-label">Target RTO</div>
+        <div class="score-card-val">5<span style="font-size:16px;font-weight:400;color:var(--text-dim)">min</span></div>
+        <div class="score-card-sub">Mission-critical tier</div>
+      </div>
+      <div class="score-card">
+        <div class="score-card-label">Target RPO</div>
+        <div class="score-card-val">1<span style="font-size:16px;font-weight:400;color:var(--text-dim)">min</span></div>
+        <div class="score-card-sub">DynamoDB Global Tables</div>
+      </div>
+      <div class="score-card">
+        <div class="score-card-label">Compliance Status</div>
+        <div class="score-card-val warning" style="font-size:18px">Policy Breached</div>
+        <div class="score-card-sub">Lambda tier exceeds RTO by 40s</div>
+      </div>
+      <div class="score-card">
+        <div class="score-card-label">App Tier</div>
+        <div class="score-card-val" style="font-size:18px;color:var(--orange)">Mission Critical</div>
+        <div class="score-card-sub">Billing AP v2.4 · Multi-region</div>
+      </div>
+      <div class="score-card">
+        <div class="score-card-label">Last Assessed</div>
+        <div class="score-card-val" style="font-size:18px;color:var(--blue)">14h ago</div>
+        <div class="score-card-sub">Oct 31, 2024 21:01 UTC+1</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WORKFLOW SECTION -->
+  <div class="rh-section">
+    <div class="rh-section-header" onclick="toggleSection('workflow')">
+      <span class="rh-section-chevron open" id="chev-workflow">▶</span>
+      <strong>Workflow</strong>
+    </div>
+    <div id="section-workflow">
+      <div class="workflow-grid">
+
+        <div class="workflow-step">
+          <div class="ws-icon done">📋</div>
+          <div class="ws-step-num"><span class="status-done">1. ✅ Publish application</span></div>
+          <div class="ws-title">Publish application</div>
+          <div class="ws-desc">Publish your application and its resources</div>
+          <button class="ws-btn secondary" id="btn-republish" onclick="showToast('Re-publishing BillingApp resources...')">Republish</button>
+        </div>
+
+        <div class="workflow-step">
+          <div class="ws-icon done">⭐</div>
+          <div class="ws-step-num"><span class="status-done">2. ✅ Assess resiliency</span></div>
+          <div class="ws-title">Assess resiliency</div>
+          <div class="ws-desc">Run an assessment to receive recommendations to improve resiliency</div>
+          <button class="ws-btn secondary" id="btn-reassess" onclick="runAssessment()">Reassess</button>
+        </div>
+
+        <div class="workflow-step">
+          <div class="ws-icon active">📝</div>
+          <div class="ws-step-num"><span class="status-active">3. Set up recommendations</span></div>
+          <div class="ws-title">Set up recommendations</div>
+          <div class="ws-desc">Set up recommended alarms, SOPs, and tests</div>
+          <button class="ws-btn primary-orange" id="btn-setup-recs" onclick="showToast('Opening recommendations setup for BillingApp...')">Set up recommendations</button>
+        </div>
+
+        <div class="workflow-step">
+          <div class="ws-icon">▶️</div>
+          <div class="ws-step-num">4. Run experiments</div>
+          <div class="ws-title">Run experiments</div>
+          <div class="ws-desc">Run experiments on a regular basis to validate resiliency posture</div>
+          <button class="ws-btn disabled" id="btn-run-exp" disabled>Run experiments</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- TABS SECTION -->
+  <div class="rh-section">
+    <div class="rh-tabs">
+      <div class="rh-tab" id="tab-summary" onclick="switchTab('summary')">Summary</div>
+      <div class="rh-tab" id="tab-versions" onclick="switchTab('versions')">Versions</div>
+      <div class="rh-tab active" id="tab-assessments" onclick="switchTab('assessments')">Assessments</div>
+      <div class="rh-tab" id="tab-alarms" onclick="switchTab('alarms')">Alarms</div>
+      <div class="rh-tab" id="tab-sops" onclick="switchTab('sops')">SOPs</div>
+      <div class="rh-tab" id="tab-fis" onclick="switchTab('fis')">Fault injection experiments</div>
+      <div class="rh-tab" id="tab-tags" onclick="switchTab('tags')">Tags</div>
+    </div>
+
+    <!-- ASSESSMENTS TAB -->
+    <div id="tabcontent-assessments">
+      <div class="rh-assessment-header">
+        <span class="rh-assessment-title">Resiliency assessments</span>
+        <span class="rh-assessment-count">(3)</span>
+        <div class="rh-assessment-actions" style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+          <div class="search-box">🔍 <span style="color:var(--text-muted)">Find assessments</span></div>
+          <button class="rh-btn disabled" disabled>Delete</button>
+          <div class="rh-pagination">
+            <button class="pg-btn">‹</button>
+            <span>1</span>
+            <button class="pg-btn">›</button>
+            <button class="pg-btn">⚙</button>
+          </div>
+          <button class="rh-btn ctaOrange" id="btn-new-assessment" onclick="runAssessment()">Run new resiliency assessment</button>
+        </div>
+      </div>
+
+      <table class="rh-table">
+        <thead>
+          <tr>
+            <th><input type="checkbox"></th>
+            <th>Name ▽</th>
+            <th>Status ▽</th>
+            <th>Compliance status ▽</th>
+            <th>Invoker ▽</th>
+            <th>Start time ▽</th>
+            <th>End time ▽</th>
+          </tr>
+        </thead>
+        <tbody id="assessment-tbody">
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><a href="#" class="rh-link" onclick="showToast('Loading assessment details...');return false">Assessment-report-2wv7m6qoez4</a></td>
+            <td><span class="status-badge success">✅ Success</span></td>
+            <td><span class="status-badge policy-breached">⊘ Policy breached</span></td>
+            <td>User</td>
+            <td>October 31, 2024, 21:01 (UTC+01:00)</td>
+            <td>October 31, 2024, 21:07 (UTC+01:00)</td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><a href="#" class="rh-link" onclick="showToast('Loading assessment details...');return false">Assessment-report-9kp1x3mjfr2</a></td>
+            <td><span class="status-badge success">✅ Success</span></td>
+            <td><span class="status-badge success">✅ Policy met</span></td>
+            <td>System</td>
+            <td>October 15, 2024, 18:30 (UTC+01:00)</td>
+            <td>October 15, 2024, 18:36 (UTC+01:00)</td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><a href="#" class="rh-link" onclick="showToast('Loading assessment details...');return false">Assessment-report-4dt8y9nlwq1</a></td>
+            <td><span class="status-badge warning">⚠ In Progress</span></td>
+            <td><span style="color:var(--text-muted)">—</span></td>
+            <td>User</td>
+            <td>November 07, 2024, 09:00 (UTC+01:00)</td>
+            <td style="color:var(--text-muted)">Running...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SUMMARY TAB (hidden) -->
+    <div id="tabcontent-summary" style="display:none">
+      <div class="chart-area">
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:16px">Resiliency Score Over Time</h3>
+        <canvas id="resilience-chart" height="200"></canvas>
+      </div>
+      <div style="padding:0 20px 20px">
+        <h3 style="font-size:13px;font-weight:700;margin-bottom:12px">Recommendations (5 open)</h3>
+        <table class="rh-table">
+          <thead><tr><th>Category</th><th>Recommendation</th><th>Priority</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Software</td><td>Enable Lambda function retry with exponential backoff</td><td style="color:var(--red)">High</td><td><span class="status-badge warning">Open</span></td></tr>
+            <tr><td>Infrastructure</td><td>Configure DynamoDB point-in-time recovery in us-west-2</td><td style="color:var(--yellow)">Medium</td><td><span class="status-badge warning">Open</span></td></tr>
+            <tr><td>Availability</td><td>Add Route 53 health checks for secondary region endpoints</td><td style="color:var(--red)">High</td><td><span class="status-badge success">Resolved</span></td></tr>
+            <tr><td>Test</td><td>Schedule monthly chaos engineering game-day exercises</td><td style="color:var(--text-muted)">Low</td><td><span class="status-badge warning">Open</span></td></tr>
+            <tr><td>Ops/SOP</td><td>Create runbook for manual failover escalation scenario</td><td style="color:var(--yellow)">Medium</td><td><span class="status-badge warning">Open</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- FIS TAB (hidden) -->
+    <div id="tabcontent-fis" style="display:none">
+      <div class="experiment-row">
+        <div class="exp-icon">💥</div>
+        <div>
+          <div class="exp-name">DynamoDB-WriteCapacity-Exhaustion</div>
+          <div style="font-size:11px;color:var(--text-dim)">Exhaust write capacity units to simulate DynamoDB throttling in us-east-1</div>
+        </div>
+        <div class="exp-date">Last run: Oct 31</div>
+        <div class="exp-status ready">Ready</div>
+        <button class="rh-btn" onclick="showToast('Starting FIS experiment: DynamoDB Write Throttle...')">Run</button>
+      </div>
+      <div class="experiment-row">
+        <div class="exp-icon">🔌</div>
+        <div>
+          <div class="exp-name">Lambda-Concurrent-Throttle</div>
+          <div style="font-size:11px;color:var(--text-dim)">Set Lambda reserved concurrency to 0 for Billing processor for 60 seconds</div>
+        </div>
+        <div class="exp-date">Last run: Oct 15</div>
+        <div class="exp-status pendingclass">pending</div>
+        <button class="rh-btn" onclick="showToast('Starting FIS experiment: Lambda Throttle...')">Run</button>
+      </div>
+      <div class="experiment-row">
+        <div class="exp-icon">🌐</div>
+        <div>
+          <div class="exp-name">API-Gateway-5xx-Injection</div>
+          <div style="font-size:11px;color:var(--text-dim)">Inject 500 errors on 30% of API Gateway requests for Billing endpoints</div>
+        </div>
+        <div class="exp-date">Not run</div>
+        <div class="exp-status pending">Pending</div>
+        <button class="rh-btn" onclick="showToast('Starting FIS experiment: API Gateway 5xx Injection...')">Run</button>
+      </div>
+      <div class="experiment-row">
+        <div class="exp-icon">🏢</div>
+        <div>
+          <div class="exp-name">AZ-Failure-Simulation</div>
+          <div style="font-size:11px;color:var(--text-dim)">Simulate availability zone failure in us-east-1a — routes traffic to remaining AZs</div>
+        </div>
+        <div class="exp-date">Last run: Sep 20</div>
+        <div class="exp-status ready">Ready</div>
+        <button class="rh-btn" onclick="showToast('Starting FIS experiment: AZ Failure...')">Run</button>
+      </div>
+    </div>
+
+    <!-- OTHER TABS (hidden) -->
+    <div id="tabcontent-versions" style="display:none;padding:20px;color:var(--text-dim)">No previous versions found. Publish a new version after making architecture changes.</div>
+    <div id="tabcontent-alarms" style="display:none;">
+      <table class="rh-table" style="margin:0">
+        <thead><tr><th>Alarm Name</th><th>Type</th><th>State</th><th>Threshold</th></tr></thead>
+        <tbody>
+          <tr><td>BillingApp-DDB-WriteThrottle</td><td>CloudWatch</td><td><span class="status-badge success">OK</span></td><td>&gt; 100 throttles/min</td></tr>
+          <tr><td>BillingApp-Lambda-Error-Rate</td><td>CloudWatch</td><td><span class="status-badge success">OK</span></td><td>&gt; 5% errors</td></tr>
+          <tr><td>BillingApp-Route53-Health</td><td>Route53 HC</td><td><span class="status-badge success">Healthy</span></td><td>Health check passing</td></tr>
+          <tr><td>BillingApp-RDS-CPU</td><td>CloudWatch</td><td><span class="status-badge warning">⚠ Alarm</span></td><td>&gt; 80% CPU</td></tr>
+          <tr><td>BillingApp-API-5xx</td><td>CloudWatch</td><td><span class="status-badge success">OK</span></td><td>&gt; 1% 5xx rate</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="tabcontent-sops" style="display:none;">
+      <table class="rh-table" style="margin:0">
+        <thead><tr><th>SOP Name</th><th>Type</th><th>Last Updated</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>BillingApp-DDB-Failover-Runbook</td><td>SSM Automation</td><td>Oct 30, 2024</td><td><span class="status-badge success">Active</span></td></tr>
+          <tr><td>BillingApp-Manual-Failover-Escalation</td><td>Document</td><td>Sep 15, 2024</td><td><span class="status-badge warning">Draft</span></td></tr>
+          <tr><td>BillingApp-RDS-Point-In-Time-Recovery</td><td>SSM Automation</td><td>Oct 01, 2024</td><td><span class="status-badge success">Active</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="tabcontent-tags" style="display:none;padding:20px">
+      <table class="rh-table">
+        <thead><tr><th>Key</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>env</td><td>production</td></tr>
+          <tr><td>team</td><td>billing-platform</td></tr>
+          <tr><td>tier</td><td>mission-critical</td></tr>
+          <tr><td>dr-tier</td><td>active-passive</td></tr>
+          <tr><td>cost-center</td><td>billing-infra</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /rh-layout -->
+
+<!-- TOAST -->
+<div class="rh-toast" id="rh-toast"></div>
+
+<script>
+  let scoreChart = null;
+
+  function showToast(msg) {
+    const t = document.getElementById('rh-toast');
+    t.textContent = '✅ ' + msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  function toggleSection(id) {
+    const sec = document.getElementById('section-' + id);
+    const chev = document.getElementById('chev-' + id);
+    const isHidden = sec.style.display === 'none';
+    sec.style.display = isHidden ? 'block' : 'none';
+    chev.classList.toggle('open', isHidden);
+  }
+
+  function switchTab(tab) {
+    const tabs = ['summary','versions','assessments','alarms','sops','fis','tags'];
+    tabs.forEach(t => {
+      const el = document.getElementById('tab-' + t);
+      const tc = document.getElementById('tabcontent-' + t);
+      if (el) el.classList.toggle('active', t === tab);
+      if (tc) tc.style.display = t === tab ? '' : 'none';
+    });
+    if (tab === 'summary' && !scoreChart) initScoreChart();
+  }
+
+  function initScoreChart() {
+    const ctx = document.getElementById('resilience-chart');
+    if (!ctx) return;
+    const labels = ['Sep 1','Sep 8','Sep 15','Sep 22','Oct 1','Oct 8','Oct 15','Oct 22','Oct 28','Nov 4'];
+    scoreChart = new Chart(ctx.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Score', data: [72,74,75,73,78,79,81,80,84,85], borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,0.08)', borderWidth: 2, tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: '#3fb950' },
+          { label: 'Target', data: Array(10).fill(80), borderColor: '#f85149', borderWidth: 1.5, borderDash: [6,4], tension: 0, fill: false, pointRadius: 0 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { color: '#8b949e', font: { size: 11 } } },
+          tooltip: { enabled: true }
+        },
+        scales: {
+          x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { min: 60, max: 100, ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+      }
+    });
+  }
+
+  let assessing = false;
+  function runAssessment() {
+    if (assessing) return;
+    assessing = true;
+    const btn = document.getElementById('btn-new-assessment');
+    btn.textContent = '⏳ Running...';
+    btn.disabled = true;
+    showToast('Resiliency assessment started for BillingApp...');
+    setTimeout(() => {
+      const tbody = document.getElementById('assessment-tbody');
+      const ts = new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour:'2-digit', minute:'2-digit' });
+      const row = document.createElement('tr');
+      const id = 'Assessment-report-' + Math.random().toString(36).slice(2,10);
+      row.innerHTML = `
+        <td><input type="checkbox"></td>
+        <td><a href="#" class="rh-link">${id}</a></td>
+        <td><span class="status-badge warning">⚠ In Progress</span></td>
+        <td style="color:var(--text-muted)">—</td>
+        <td>User</td>
+        <td>${ts}</td>
+        <td style="color:var(--text-muted)">Running...</td>
+      `;
+      tbody.prepend(row);
+      btn.textContent = 'Run new resiliency assessment';
+      btn.disabled = false;
+      assessing = false;
+      showToast('Assessment complete — score updated to 85/100');
+      // Animate score
+      const scoreEl = document.getElementById('rh-score-big');
+      scoreEl.innerHTML = '85<span style="font-size:16px;font-weight:400;color:var(--text-dim)">/100</span>';
+      scoreEl.style.color = 'var(--green)';
+      // Update row to success
+      setTimeout(() => {
+        row.children[2].innerHTML = '<span class="status-badge success">✅ Success</span>';
+        row.children[3].innerHTML = '<span class="status-badge success">✅ Policy met</span>';
+        row.children[6].textContent = new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour:'2-digit', minute:'2-digit' });
+        document.getElementById('policy-badge').className = 'rh-policy-badge ok';
+        document.getElementById('policy-badge').innerHTML = '<span class="policy-dot"></span>Policy met';
+      }, 2000);
+    }, 3500);
+  }
+
+  // Initial tab setup — show only assessments
+  ['summary','versions','alarms','sops','fis','tags'].forEach(t => {
+    const el = document.getElementById('tabcontent-' + t);
+    if (el) el.style.display = 'none';
+  });
+</script>
+</body>
+</html>
